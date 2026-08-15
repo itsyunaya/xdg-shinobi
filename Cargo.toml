@@ -1,0 +1,16 @@
+[package]
+name = "xdg-shinobi"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = 3
+
+[dependencies]
+clap = { version = "4.6.6", features = ["derive"] }
+rust-embed = "8.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+termimad = "0.35.1"
