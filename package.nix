@@ -1,12 +1,14 @@
-{ pkg-config, rustPlatform }: let
-    manifest = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
-    inherit (manifest.package) name version;
-in rustPlatform.buildRustPackage {
-    pname = name;
-    inherit version;
+{ rustPlatform }: let
+	manifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+	inherit (manifest.package) name version;
+in
+	rustPlatform.buildRustPackage {
+		pname = name;
+		inherit version;
 
-   src = ./.;
+		# there are no tests to run
+		doCheck = false;
 
-   cargoHash = "sha256-hKSd/i81utyyYCQvHvE1zsH5mvqMXQ0Oahc7XQT2u3g=";
-   nativeBuildInputs = [ pkg-config ];
-}
+		src = ./.;
+		cargoHash = "sha256-RWD++yORDrNOyxrS4ZceZHPtnGEEkHDgMFvNdwFRMmE=";
+	}

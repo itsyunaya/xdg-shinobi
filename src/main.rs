@@ -1,10 +1,12 @@
 #![allow(clippy::needless_return)]
 
 use clap::Parser;
-use rust_embed::RustEmbed;
+use crossterm::style::Stylize;
+use pulldown_cmark_mdcat::{
+    Environment, Settings, TerminalProgram, TerminalSize, push_tty, resources::FileResourceHandler,
+};
 use serde::{Deserialize, Serialize};
 use std::{env, fs, path::Path};
-use termimad::crossterm::style::Stylize;
 
 enum XdgEnvVars {
     DataHome,
@@ -47,8 +49,8 @@ impl XdgEnvVars {
                 let msg_warn = format!("The ${x} environment variable is not set, make sure to add it to your shell's configuration before setting any of the other environment variables!");
                 let msg_rec = format!("     ⤷ The recommended value is: {r}");
 
-                println!("{}", msg_warn.cyan());
-                println!("{}", msg_rec.cyan());
+                println!("{}", msg_warn.cyan().bold());
+                println!("{}", msg_rec.cyan().bold());
             }
         });
 
@@ -69,7 +71,7 @@ struct FileEntry {
     pub help: String,
 }
 
-#[derive(RustEmbed)]
+#[derive(rust_embed::RustEmbed)]
 #[folder = "programs/"]
 struct Programs;
 
@@ -122,6 +124,22 @@ fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
         p
     };
 
+    let termsize = TerminalSize::detect().unwrap_or_default();
+    let settings = Settings {
+        terminal_capabilities: TerminalProgram::detect().capabilities(),
+        terminal_size: TerminalSize {
+            columns: termsize.columns / 2,
+            ..termsize
+        },
+        syntax_set: &Default::default(),
+        theme: Default::default(),
+        syntax_theme: None,
+    };
+
+    let env = Environment::for_local_directory(&env::current_dir()?)?;
+    let resource_handler = FileResourceHandler::new(100 * 1024 * 1024);
+    let mut handle = std::io::stdout().lock();
+
     fs::read_dir(&vars.home_dir)?.flatten().for_each(|entry| {
         let path = entry.path().to_string_lossy().to_string();
         let subpath = path
@@ -139,7 +157,10 @@ fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
             let file: &FileEntry = spec
                 .files
                 .iter()
-                .find(|&f| f.path == format!("$HOME/{}", subpath))
+                .find(|&f| {
+                    f.path == format!("$HOME/{}", subpath)
+                        || f.path == format!("$HOME/{}", subpath.to_lowercase())
+                })
                 .unwrap();
 
             if args.skip_unsupported && !file.movable {
@@ -152,12 +173,13 @@ fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
             println!(
                 "[{}]: {}",
                 if file.movable { spec_name.red() } else { spec_name.yellow() },
-                termimad::inline(&format!("**{}**", file.path))
+                file.path.clone().bold()
             );
 
             println!();
 
-            termimad::print_text(&file.help);
+            let parser = pulldown_cmark::Parser::new(&file.help);
+            push_tty(&settings, &env, &resource_handler, &mut handle, parser).unwrap();
 
             println!();
         }
@@ -198,7 +220,12 @@ fn main() {
 
     XdgEnvVars::check_vars();
 
-    println!("Starting to check your {}.", "$HOME".cyan());
+    println!(
+        "{} {}{}",
+        "Starting to check your".bold(),
+        "$HOME".cyan().bold(),
+        ".".bold()
+    );
     println!();
 
     let vars = Vars::new(
@@ -211,10 +238,18 @@ fn main() {
         eprintln!("{e}");
     }
 
-    println!("Finished checking your {}.", "$HOME".cyan());
+    println!(
+        "{} {}{}",
+        "Done checking your".bold(),
+        "$HOME".cyan().bold(),
+        ".".bold()
+    );
     println!();
     println!(
-        "If you have files in your {} that shouldn't be there, but weren't recognised by xdg-shinobi, please consider creating a configuration file for it and opening a pull request on xdg-ninja's GitHub.",
-        "$HOME".dark_cyan()
+        "{} {} {}",
+        "If you have files in your".italic(),
+        "$HOME".dark_cyan().italic(),
+        "that shouldn't be there, but weren't recognised by xdg-shinobi, please consider creating a configuration file for it and opening a pull request on xdg-ninja's GitHub.".italic()
     );
+    println!();
 }

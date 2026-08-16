@@ -61,13 +61,12 @@ If it is desired to simply append new programs to the scan list instead of overr
 
 Pros:
 - Considerably faster
-- Slightly smaller install size (may vary by platform)
 - No external dependencies needed
 
 Cons:
-- Visually less appealing and partially broken Markdown (for now)
 - Possibly bug-prone due to being a newer project
 - Not packaged for any platform besides Nix
+- Larger binary size
 
 ## Why remake xdg-ninja?
 
