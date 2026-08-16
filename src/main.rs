@@ -129,9 +129,10 @@ fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
             .unwrap();
 
         let spec = progs.iter().find(|&q| {
-            q.files
-                .iter()
-                .any(|f| f.path == format!("$HOME/{}", subpath))
+            q.files.iter().any(|f| {
+                f.path == format!("$HOME/{}", subpath)
+                    || f.path == format!("$HOME/{}", subpath.to_lowercase())
+            })
         });
 
         if let Some(spec) = spec {
