@@ -82,41 +82,44 @@ fn get_progs_inbuilt(p: &mut Vec<Spec>) {
     });
 }
 
-fn get_progs_user(p: &mut Vec<Spec>, x: &String) -> Result<(), std::io::Error> {
+fn get_progs_user(prog_vec: &mut Vec<Spec>, prog_dir: &String) -> Result<(), std::io::Error> {
     // we cannot use unwrap here because we don't know if the user passed program directory
     // actually contains valid files. in that case, we instead exit with an error
-    Path::new(&x).read_dir()?.flatten().for_each(|entry| {
-        let path = entry.path();
+    Path::new(&prog_dir)
+        .read_dir()?
+        .flatten()
+        .for_each(|entry| {
+            let path = entry.path();
 
-        if !(path.ends_with(".json") || path.ends_with(".jsonc")) {
-            return;
-        }
+            if !(path.ends_with(".json") || path.ends_with(".jsonc")) {
+                return;
+            }
 
-        let content = fs::read_to_string(&path).unwrap_or_else(|_| {
-            eprintln!("Couldn't read files in provided directory '{x}'.");
-            std::process::exit(1);
-        });
-        p.push(serde_json::from_str(&content).unwrap_or_else(|_| {
+            let content = fs::read_to_string(&path).unwrap_or_else(|_| {
+                eprintln!("Couldn't read files in provided directory '{prog_dir}'.");
+                std::process::exit(1);
+            });
+            prog_vec.push(serde_json::from_str(&content).unwrap_or_else(|_| {
             eprintln!(
                 "Couldn't parse file {} in provided directory '{}'. Make sure it is valid JSON.",
                 path.display(),
-                x
+                prog_dir
             );
             std::process::exit(1);
         }))
-    });
+        });
 
     return Ok(());
 }
 
-fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
+fn check_programs(env_vars: EnvVars, args: Args) -> Result<(), std::io::Error> {
     let progs: Vec<Spec> = {
         let mut p: Vec<Spec> = Vec::new();
 
-        if let Some(x) = vars.xn_prog_dir {
-            get_progs_user(&mut p, &x)?;
+        if let Some(prog_dir) = env_vars.xn_prog_dir {
+            get_progs_user(&mut p, &prog_dir)?;
             #[rustfmt::skip]
-            if vars.xn_append_progs.is_some() { get_progs_inbuilt(&mut p) };
+            if env_vars.xn_append_progs.is_some() { get_progs_inbuilt(&mut p) };
         } else {
             get_progs_inbuilt(&mut p);
         }
@@ -137,70 +140,77 @@ fn check_programs(vars: Vars, args: Args) -> Result<(), std::io::Error> {
     };
 
     let env = Environment::for_local_directory(&env::current_dir()?)?;
-    let resource_handler = FileResourceHandler::new(100 * 1024 * 1024);
+    let resource_handler = FileResourceHandler::new(1024 * 1024);
     let mut handle = std::io::stdout().lock();
 
-    fs::read_dir(&vars.home_dir)?.flatten().for_each(|entry| {
-        let path = entry.path().to_string_lossy().to_string();
-        let subpath = path
-            .strip_prefix(format!("{}/", vars.home_dir).as_str())
-            .unwrap();
+    fs::read_dir(&env_vars.home_dir)?
+        .flatten()
+        .for_each(|entry| {
+            let path = entry.path().to_string_lossy().to_string();
+            let subpath = path
+                .strip_prefix(format!("{}/", env_vars.home_dir).as_str())
+                .unwrap();
 
-        let spec = progs.iter().find(|&q| {
-            q.files.iter().any(|f| {
-                f.path == format!("$HOME/{}", subpath)
-                    || f.path == format!("$HOME/{}", subpath.to_lowercase())
-            })
-        });
-
-        if let Some(spec) = spec {
-            let file: &FileEntry = spec
-                .files
-                .iter()
-                .find(|&f| {
+            let spec = progs.iter().find(|&q| {
+                q.files.iter().any(|f| {
                     f.path == format!("$HOME/{}", subpath)
                         || f.path == format!("$HOME/{}", subpath.to_lowercase())
                 })
-                .unwrap();
+            });
 
-            if args.skip_unsupported && !file.movable {
-                return;
+            if let Some(spec) = spec {
+                let file: &FileEntry = spec
+                    .files
+                    .iter()
+                    .find(|&f| {
+                        f.path == format!("$HOME/{}", subpath)
+                            || f.path == format!("$HOME/{}", subpath.to_lowercase())
+                    })
+                    .unwrap();
+
+                if args.skip_unsupported && !file.movable {
+                    return;
+                }
+
+                let spec_name = spec.name.clone().to_string();
+
+                #[rustfmt::skip]
+                println!(
+                    "[{}]: {}",
+                    if file.movable { spec_name.red() } else { spec_name.yellow() },
+                    file.path.clone().bold()
+                );
+
+                println!();
+
+                let parser = pulldown_cmark::Parser::new(&file.help);
+                push_tty(&settings, &env, &resource_handler, &mut handle, parser).unwrap_or_else(
+                    |err| {
+                        eprintln!("An error has occurred while checking programs: {err}");
+                        std::process::exit(1);
+                    },
+                );
+
+                println!();
             }
-
-            let spec_name = spec.name.clone().to_string();
-
-            #[rustfmt::skip]
-            println!(
-                "[{}]: {}",
-                if file.movable { spec_name.red() } else { spec_name.yellow() },
-                file.path.clone().bold()
-            );
-
-            println!();
-
-            let parser = pulldown_cmark::Parser::new(&file.help);
-            push_tty(&settings, &env, &resource_handler, &mut handle, parser).unwrap();
-
-            println!();
-        }
-    });
+        });
 
     return Ok(());
 }
 
-struct Vars {
+struct EnvVars {
     home_dir: String,
     xn_prog_dir: Option<String>,
     xn_append_progs: Option<String>,
 }
 
-impl Vars {
+impl EnvVars {
     pub fn new(
         home_dir: String,
         xn_prog_dir: Option<String>,
         xn_append_progs: Option<String>,
     ) -> Self {
-        Vars {
+        EnvVars {
             home_dir,
             xn_prog_dir,
             xn_append_progs,
@@ -209,6 +219,7 @@ impl Vars {
 }
 
 #[derive(Parser, Debug)]
+#[command(version)]
 struct Args {
     /// Don't display anything for files that do not have fixes available
     #[clap(long)]
@@ -228,13 +239,13 @@ fn main() {
     );
     println!();
 
-    let vars = Vars::new(
+    let env_vars = EnvVars::new(
         env::var("HOME").expect("Should've been able to read $HOME environment variable"),
         env::var("XN_PROGRAMS_DIR").ok(),
         env::var("XN_APPEND_PROGRAMS").ok(),
     );
 
-    if let Err(e) = check_programs(vars, args) {
+    if let Err(e) = check_programs(env_vars, args) {
         eprintln!("{e}");
     }
 
