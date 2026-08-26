@@ -10,7 +10,7 @@ in
 		doCheck = false;
 
 		src = ./.;
-		cargoHash = "sha256-RWD++yORDrNOyxrS4ZceZHPtnGEEkHDgMFvNdwFRMmE=";
+		cargoHash = "sha256-AHhdBtFPm4y4JPHJNpQ4cQr8VexLP+lHj9roheGWyKQ=";
 
 		meta = {
 		    description = "Program which checks your $HOME for unwanted files and directories, and adaptation of xdg-ninja to Rust";
