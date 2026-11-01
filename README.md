@@ -4,7 +4,7 @@
 
 ## Overview
 
-`xdg-shinobi` is a project I made out of curiosity and a reimplementation of [xdg-ninja](https://github.com/b3nj5m1n/xdg-ninja), which is a shell script to check your $HOME for unwanted files and directories.
+`xdg-shinobi` is a reimplementation of [xdg-ninja](https://github.com/b3nj5m1n/xdg-ninja) I made out of curiosity, which is a shell script to check your $HOME for unwanted files and directories.
 
 It behaves roughly the same as the original, but with a slightly different user experience.
 
@@ -53,9 +53,17 @@ When ran without any arguments or environment variables, `xdg-shinobi` will simp
 
 For more information, you can run `xdg-shinobi -h`.
 
-It is possible to override the list of programs `xdg-shinobi` checks against, by providing the `XN_PROGRAMS_DIR` environment variable with a valid path to a directory of JSON files following the correct [schema](https://github.com/b3nj5m1n/xdg-ninja/blob/main/json-schema/program.json).
+It is possible to override the list of programs `xdg-shinobi` checks against, by providing the `$XN_PROGRAMS_DIR` environment variable with a valid path to a directory of JSON files following the correct [schema](https://github.com/b3nj5m1n/xdg-ninja/blob/main/json-schema/program.json).
 
-If it is desired to simply append new programs to the scan list instead of overriding the old one entirely, the `XN_APPEND_PROGRAMS` environment variable can be set (to anything). 
+If it is desired to simply append new programs to the scan list with `$XN_PROGRAMS_DIR` instead of overriding the old one entirely, the `$XN_APPEND_PROGRAMS` environment variable can be set (to anything). 
+
+Just like with `xdg-ninja`, you can place an ignore file at `$XDG_CONFIG_HOME/xdg-ninja/ignore`, or provide a custom path to one via `$XN_IGNOREFILE` to exclude certain entries from being reported.
+Said file could look something like this:
+```
+.gnupg
+.steam
+.ssh
+```
 
 ## Comparison to xdg-ninja
 
@@ -64,7 +72,7 @@ Pros:
 - No external dependencies needed
 
 Cons:
-- Possibly bug-prone due to being a newer project
+- Possibly bug-prone due to being a less mature project
 - Not packaged for any platform besides Nix
 - Larger binary size
 

@@ -6,7 +6,12 @@ use pulldown_cmark_mdcat::{
     Environment, Settings, TerminalProgram, TerminalSize, push_tty, resources::FileResourceHandler,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, fs, path::Path};
+use std::{
+    env,
+    fs::{self, File},
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+};
 
 enum XdgEnvVars {
     DataHome,
@@ -127,6 +132,30 @@ fn check_programs(env_vars: EnvVars, args: Args) -> Result<(), std::io::Error> {
         p
     };
 
+    let cfg_dir = env::var_os("XDG_CONFIG_HOME")
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "XDG_CONFIG_HOME is unset")
+        })?
+        .into_string()
+        .map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Not UTF-8: {e:?}"))
+        })?;
+    let ignorefile_path = PathBuf::from(format!("{cfg_dir}/xdg-ninja/ignore",));
+
+    let ignored_progs: Vec<String> = {
+        if let Some(ignorefile_path) = env_vars.xn_ignorefile {
+            BufReader::new(File::open(ignorefile_path)?)
+                .lines()
+                .collect::<Result<_, _>>()?
+        } else if let Some(ignorefile) = ignorefile_path.is_file().then_some(ignorefile_path) {
+            BufReader::new(File::open(ignorefile)?)
+                .lines()
+                .collect::<Result<_, _>>()?
+        } else {
+            Vec::<String>::with_capacity(0)
+        }
+    };
+
     let termsize = TerminalSize::detect().unwrap_or_default();
     let settings = Settings {
         terminal_capabilities: TerminalProgram::detect().capabilities(),
@@ -172,6 +201,10 @@ fn check_programs(env_vars: EnvVars, args: Args) -> Result<(), std::io::Error> {
                     return;
                 }
 
+                if ignored_progs.contains(&subpath.to_string()) {
+                    return;
+                }
+
                 let spec_name = spec.name.clone().to_string();
 
                 #[rustfmt::skip]
@@ -202,6 +235,7 @@ struct EnvVars {
     home_dir: String,
     xn_prog_dir: Option<String>,
     xn_append_progs: Option<String>,
+    xn_ignorefile: Option<String>,
 }
 
 impl EnvVars {
@@ -209,11 +243,13 @@ impl EnvVars {
         home_dir: String,
         xn_prog_dir: Option<String>,
         xn_append_progs: Option<String>,
+        xn_ignorefile: Option<String>,
     ) -> Self {
         EnvVars {
             home_dir,
             xn_prog_dir,
             xn_append_progs,
+            xn_ignorefile,
         }
     }
 }
@@ -243,6 +279,7 @@ fn main() {
         env::var("HOME").expect("Should've been able to read $HOME environment variable"),
         env::var("XN_PROGRAMS_DIR").ok(),
         env::var("XN_APPEND_PROGRAMS").ok(),
+        env::var("XN_IGNOREFILE").ok(),
     );
 
     if let Err(e) = check_programs(env_vars, args) {
