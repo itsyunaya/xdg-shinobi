@@ -45,7 +45,27 @@ environment.systemPackages = with pkgs; [
 ]; 
 ```
 
-3. Rebuild
+3. Add the binary cache (optional)
+
+> [!WARNING]  
+> Adding a binary cache to your configuration means trusting all packages being served by it implicitly. For more info on binary caches, see the relevant [Nix wiki page](https://wiki.nixos.org/wiki/Binary_Cache).
+
+https://ci.itsyunaya.app/nix-cache/ serves as the binary cache for many of my projects. Note that it currently only provides `x86_64-linux` packages.
+```nix
+nix = {
+    settings = {
+        substituters = [
+            "https://ci.itsyunaya.app/nix-cache"
+        ];
+
+        trusted-public-keys = [
+            "ci.itsyunaya.app-1:fG2iQIuGodAl7chEd/EXsxr0JpQYLe/P416IGq1ot4g="
+        ];
+    };
+};
+```
+
+4. Rebuild
 
 ## Usage
 
